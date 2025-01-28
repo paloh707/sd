@@ -1,83 +1,38 @@
-#!/usr/bin/env bash
-#
-# Script template to open FreeRDP connection
-#
-#    This program is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
-#    the Free Software Foundation, either version 3 of the License, or
-#    (at your option) any later version.
-#
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU General Public License for more details.
-#
-#    You should have received a copy of the GNU General Public License
-#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-# root.nix.dk
-# - 2022-11-23 : moved width and height to variables section
-# - 2023-03-23 : fixed missing $ at variable in xfreerdp call
-#              : added comments to customize section
-# - 2024-06-05 : added dependency on 'freerdp2' package
-#
-#######################################################
-### begin customize
-# Documentation
-# https://github.com/FreeRDP/FreeRDP/wiki/CommandLineInterface
-#
-# to list available keyboards run 'xfreerdp /kbd-list'
-# examples
-# french => 0x0000040C
-# german => 0x00000407
-# us     => 0x00000409
-# uk     => 0x00000809
-# danish => 0x00000406
+name: FreeRDP
 
-# set keyboard 
-KEYBOARD="0x00000406"
+on: workflow_dispatch
 
-# set screen size
-WIDTH=1920
-HEIGHT=1080
+jobs:
+  build:
 
-# define host and credentials to be used
-REMOTE=""             # hostname or ip-address
-USERNAME=""           # login
-PASSWORD=""           # passwd
+    runs-on: windows-latest
+    timeout-minutes: 9999
 
-# connnection type - you may need to adjust if you have a slow or poor connection
-NETWORK="lan"         # connection type
-PORT="3389"           # rdp default
-
-# share - if you don't need then comment the line reading
-#             /drive:${SHARENAME},${SHAREPATH} \
-SHAREPATH="/home/$USER"      # shared folder
-SHARENAME="media"            # share name on remote system
-
-### end customize
-#######################################################
-# Recent changes with freerdp has split the binaries into package **freerdp2**
-if ! [[ $(pacman -Qoq wlfreerdp) =~ "freerdp2" ]]; then
-    echo "package 'freerdp2' is not synced"
-    echo "this script requires the binaries 'wlfreerdp' and 'xfreerdp'"
-    echo "please sync the package using your package manager"
-    exit 1
-fi
-
-if [[ ${XDG_SESSION_TYPE} = "wayland" ]]; then
-        /usr/bin/wlfreerdp /bpp:24 /audio-mode:2 /sound:sys:alsa /rfx /cert-ignore +clipboard \
-        -decorations /parent-window:31 \
-        /w:${REMOTEW} /h:${REMOTEH} \
-        /kbd:${KEYBOARD} \
-        /network:${NETWORK} \
-        /drive:${SHARE},${SHAREPATH} \
-        /u:${USERNAME} /port:${PORT} /v:${REMOTE} /p:${PASSWORD} &
-else
-        /usr/bin/xfreerdp /bpp:24 /audio-mode:2 /sound:sys:alsa /rfx /cert-ignore  +clipboard \
-        /w:${REMOTEW} /h:${REMOTEH} \
-        /kbd:${KEYBOARD} \
-        /network:${NETWORK} \
-        /drive:${SHARE},${SHAREPATH} \
-        /u:${USERNAME} /port:${PORT} /v:${REMOTE} /p:${PASSWORD} &
-fi
+    steps:
+    - name: Downloading Ngrok.
+      run: |
+        Invoke-WebRequest https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+        Invoke-WebRequest https://raw.githubusercontent.com/30dayscoding/rdp/main/start.bat -OutFile start.bat
+        Invoke-WebRequest https://raw.githubusercontent.com/30dayscoding/rdp/main/wallpaper.jpg -OutFile wallpaper.jpg
+        Invoke-WebRequest https://raw.githubusercontent.com/30dayscoding/rdp/main/wallpaper.bat -OutFile wallpaper.bat
+    - name: Extracting Ngrok Files.
+      run: Expand-Archive ngrok.zip
+    - name: Connecting to your Ngrok account.
+      run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+    - name: Activating RDP access.
+      run: | 
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+        copy wallpaper.jpg D:\a\wallpaper.jpg
+        copy wallpaper.bat D:\a\wallpaper.bat
+    - name: Creating Tunnel.
+      run: Start-Process Powershell -ArgumentList '-Noexit -Command ".\ngrok\ngrok.exe tcp 3389"'
+    - name: Connecting to your RDP.
+      run: cmd /c start.bat
+    - name: RDP is ready!
+      run: | 
+        Invoke-WebRequest https://github.com/30dayscoding/rdp/raw/main/loop.ps1 -OutFile loop.ps1
+        ./loop.ps1
