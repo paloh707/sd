@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+#
+# Script template to open FreeRDP connection
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# root.nix.dk
+# - 2022-11-23 : moved width and height to variables section
+# - 2023-03-23 : fixed missing $ at variable in xfreerdp call
+#              : added comments to customize section
+# - 2024-06-05 : added dependency on 'freerdp2' package
+#
+#######################################################
+### begin customize
+# Documentation
+# https://github.com/FreeRDP/FreeRDP/wiki/CommandLineInterface
+#
+# to list available keyboards run 'xfreerdp /kbd-list'
+# examples
+# french => 0x0000040C
+# german => 0x00000407
+# us     => 0x00000409
+# uk     => 0x00000809
+# danish => 0x00000406
+
+# set keyboard 
+KEYBOARD="0x00000406"
+
+# set screen size
+WIDTH=1920
+HEIGHT=1080
+
+# define host and credentials to be used
+REMOTE=""             # hostname or ip-address
+USERNAME=""           # login
+PASSWORD=""           # passwd
+
+# connnection type - you may need to adjust if you have a slow or poor connection
+NETWORK="lan"         # connection type
+PORT="3389"           # rdp default
+
+# share - if you don't need then comment the line reading
+#             /drive:${SHARENAME},${SHAREPATH} \
+SHAREPATH="/home/$USER"      # shared folder
+SHARENAME="media"            # share name on remote system
+
+### end customize
+#######################################################
+# Recent changes with freerdp has split the binaries into package **freerdp2**
+if ! [[ $(pacman -Qoq wlfreerdp) =~ "freerdp2" ]]; then
+    echo "package 'freerdp2' is not synced"
+    echo "this script requires the binaries 'wlfreerdp' and 'xfreerdp'"
+    echo "please sync the package using your package manager"
+    exit 1
+fi
+
+if [[ ${XDG_SESSION_TYPE} = "wayland" ]]; then
+        /usr/bin/wlfreerdp /bpp:24 /audio-mode:2 /sound:sys:alsa /rfx /cert-ignore +clipboard \
+        -decorations /parent-window:31 \
+        /w:${REMOTEW} /h:${REMOTEH} \
+        /kbd:${KEYBOARD} \
+        /network:${NETWORK} \
+        /drive:${SHARE},${SHAREPATH} \
+        /u:${USERNAME} /port:${PORT} /v:${REMOTE} /p:${PASSWORD} &
+else
+        /usr/bin/xfreerdp /bpp:24 /audio-mode:2 /sound:sys:alsa /rfx /cert-ignore  +clipboard \
+        /w:${REMOTEW} /h:${REMOTEH} \
+        /kbd:${KEYBOARD} \
+        /network:${NETWORK} \
+        /drive:${SHARE},${SHAREPATH} \
+        /u:${USERNAME} /port:${PORT} /v:${REMOTE} /p:${PASSWORD} &
+fi
